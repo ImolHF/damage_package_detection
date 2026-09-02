@@ -38,6 +38,8 @@ import { Label } from '@/components/ui/label';
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
 import { Progress, ProgressLabel, ProgressValue } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
+import { HistoryView } from '@/components/history-view';
+import { ReviewView } from '@/components/review-view';
 
 type UploadItem = {
   id: string;
@@ -58,6 +60,7 @@ type Feedback = {
 } | null;
 
 type Stage = 'upload' | 'analyzing' | 'result';
+type WorkspaceView = 'workspace' | 'history' | 'dashboard' | 'review';
 
 const analysisSteps = [
   { label: '图像质量检查', detail: '检测清晰度、光线与主体完整性' },
@@ -67,10 +70,10 @@ const analysisSteps = [
 ];
 
 const navigation = [
-  { label: '检测工作台', icon: ScanSearch, active: true },
-  { label: '历史记录', icon: FileClock },
-  { label: '数据看板', icon: LayoutDashboard },
-  { label: '复核中心', icon: ClipboardCheck },
+  { label: '检测工作台', icon: ScanSearch, view: 'workspace', enabled: true },
+  { label: '历史记录', icon: FileClock, view: 'history', enabled: true },
+  { label: '数据看板', icon: LayoutDashboard, view: 'dashboard', enabled: false },
+  { label: '复核中心', icon: ClipboardCheck, view: 'review', enabled: true },
 ];
 
 const MAX_FILES = 6;
@@ -94,6 +97,9 @@ export default function Home() {
   const [analysisStep, setAnalysisStep] = useState(0);
   const [progress, setProgress] = useState(0);
   const [resultSaved, setResultSaved] = useState(false);
+  const [savingResult, setSavingResult] = useState(false);
+  const [resultError, setResultError] = useState('');
+  const [activeView, setActiveView] = useState<WorkspaceView>('workspace');
 
   useEffect(() => {
     const saved = window.localStorage.getItem('package-inspection-draft');
@@ -155,6 +161,7 @@ export default function Home() {
     window.localStorage.setItem('package-inspection-draft', JSON.stringify(draft));
     setFeedback(null);
     setResultSaved(false);
+    setResultError('');
     setAnalysisStep(0);
     setProgress(14);
     setStage('analyzing');
@@ -176,9 +183,35 @@ export default function Home() {
 
   function restartAnalysis() {
     setResultSaved(false);
+    setResultError('');
     setAnalysisStep(0);
     setProgress(14);
     setStage('analyzing');
+  }
+
+  async function saveResult() {
+    setSavingResult(true);
+    setResultError('');
+    try {
+      const response = await fetch('/api/inspections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          waybill: draft.waybill,
+          orderNo: draft.order,
+          scene: draft.scene,
+          damageTypes: ['破洞', '撕裂'],
+          confidence: 95,
+          aiLevel: 3,
+        }),
+      });
+      if (!response.ok) throw new Error('save_failed');
+      setResultSaved(true);
+    } catch {
+      setResultError('保存失败，请稍后重试。');
+    } finally {
+      setSavingResult(false);
+    }
   }
 
   function addFiles(files: File[]) {
@@ -263,18 +296,29 @@ export default function Home() {
           <div className="space-y-1">
             {navigation.map((item) => {
               const Icon = item.icon;
+              const isActive = item.view === activeView;
               return (
                 <button
                   key={item.label}
+                  type="button"
+                  disabled={!item.enabled}
+                  onClick={() => {
+                    if (item.enabled) {
+                      setActiveView(item.view as WorkspaceView);
+                      setIsSidebarOpen(false);
+                    }
+                  }}
                   className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition ${
-                    item.active
+                    isActive
                       ? 'bg-white/10 font-medium text-white shadow-[inset_3px_0_0_#e1251b]'
-                      : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                      : item.enabled
+                        ? 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                        : 'cursor-not-allowed text-slate-600'
                   }`}
                 >
-                  <Icon className={`size-[18px] ${item.active ? 'text-[#ff665e]' : ''}`} />
+                  <Icon className={`size-[18px] ${isActive ? 'text-[#ff665e]' : ''}`} />
                   <span>{item.label}</span>
-                  {!item.active && (
+                  {!item.enabled && (
                     <span className="ml-auto rounded-full bg-white/5 px-1.5 py-0.5 text-[9px] text-slate-500">
                       待开放
                     </span>
@@ -308,7 +352,9 @@ export default function Home() {
           <div className="flex items-center gap-2 text-sm text-slate-400">
             <span>工作空间</span>
             <ChevronRight className="size-4" />
-            <span className="font-medium text-slate-700">检测工作台</span>
+            <span className="font-medium text-slate-700">
+              {activeView === 'workspace' ? '检测工作台' : activeView === 'history' ? '历史记录' : activeView === 'review' ? '复核中心' : '数据看板'}
+            </span>
           </div>
           <div className="ml-auto flex items-center gap-2">
             <button className="relative rounded-xl p-2.5 text-slate-500 transition hover:bg-slate-100" aria-label="通知">
@@ -325,6 +371,7 @@ export default function Home() {
           </div>
         </header>
 
+        {activeView === 'workspace' ? (
         <main className="mx-auto max-w-[1440px] px-4 py-7 sm:px-7 lg:py-9">
           <div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div>
@@ -767,9 +814,9 @@ export default function Home() {
               </div>
 
               <div className="mt-5 flex flex-col justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-[0_10px_35px_rgba(15,23,42,.04)] sm:flex-row sm:items-center">
-                <div className="flex items-center gap-2 text-xs text-emerald-700">
-                  <CheckCircle2 className="size-4" />
-                  {resultSaved ? '检测结果已保存到当前任务。' : '检测已完成，结果等待人工复核。'}
+                <div className={`flex items-center gap-2 text-xs ${resultError ? 'text-red-700' : 'text-emerald-700'}`}>
+                  {resultError ? <AlertCircle className="size-4" /> : <CheckCircle2 className="size-4" />}
+                  {resultError || (resultSaved ? '检测结果已保存，可在历史记录和复核中心查看。' : '检测已完成，结果等待人工复核。')}
                 </div>
                 <div className="flex gap-2">
                   <Button variant="outline" className="h-10 flex-1 sm:flex-none" onClick={() => setStage('upload')}>
@@ -780,16 +827,21 @@ export default function Home() {
                   </Button>
                   <Button
                     className="h-10 flex-1 bg-[#e1251b] hover:bg-[#c91f17] sm:flex-none"
-                    onClick={() => setResultSaved(true)}
-                    disabled={resultSaved}
+                    onClick={saveResult}
+                    disabled={resultSaved || savingResult}
                   >
-                    <Save className="size-4" />{resultSaved ? '已保存' : '保存结果'}
+                    <Save className="size-4" />{savingResult ? '保存中…' : resultSaved ? '已保存' : '保存结果'}
                   </Button>
                 </div>
               </div>
             </>
           )}
         </main>
+        ) : activeView === 'history' ? (
+          <HistoryView onReview={() => setActiveView('review')} />
+        ) : (
+          <ReviewView onHistory={() => setActiveView('history')} />
+        )}
       </div>
     </div>
   );
