@@ -148,3 +148,29 @@ textarea {
 ::selection {
   background: rgb(225 37 27 / 18%);
 }
+
+@keyframes scan-sweep {
+  0% {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  10%,
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(min(52vw, 560px));
+    opacity: 0;
+  }
+}
+
+.scan-sweep {
+  animation: scan-sweep 2.3s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-sweep {
+    animation: none;
+    top: 50%;
+  }
+}

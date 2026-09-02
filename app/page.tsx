@@ -2,7 +2,9 @@
 
 import { ChangeEvent, DragEvent, useEffect, useRef, useState } from 'react';
 import {
+  Activity,
   AlertCircle,
+  ArrowLeft,
   Bell,
   Box,
   CheckCircle2,
@@ -10,22 +12,31 @@ import {
   CircleHelp,
   ClipboardCheck,
   FileClock,
+  FileSearch,
+  Gauge,
   ImagePlus,
   LayoutDashboard,
+  Loader2,
   Menu,
   PackageCheck,
+  RotateCcw,
   Save,
+  ScanLine,
   ScanSearch,
   ShieldCheck,
+  Sparkles,
   Trash2,
+  TriangleAlert,
   UploadCloud,
   X,
 } from 'lucide-react';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
+import { Progress, ProgressLabel, ProgressValue } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
 
 type UploadItem = {
@@ -45,6 +56,15 @@ type Feedback = {
   type: 'success' | 'error';
   text: string;
 } | null;
+
+type Stage = 'upload' | 'analyzing' | 'result';
+
+const analysisSteps = [
+  { label: '图像质量检查', detail: '检测清晰度、光线与主体完整性' },
+  { label: '破损区域定位', detail: '识别破洞、撕裂、浸湿等异常' },
+  { label: '破损程度评估', detail: '结合面积、位置与置信度综合分析' },
+  { label: '生成定损建议', detail: '匹配退货包裹分级与处理规则' },
+];
 
 const navigation = [
   { label: '检测工作台', icon: ScanSearch, active: true },
@@ -70,6 +90,10 @@ export default function Home() {
     remark: '',
   });
   const [feedback, setFeedback] = useState<Feedback>(null);
+  const [stage, setStage] = useState<Stage>('upload');
+  const [analysisStep, setAnalysisStep] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const [resultSaved, setResultSaved] = useState(false);
 
   useEffect(() => {
     const saved = window.localStorage.getItem('package-inspection-draft');
@@ -83,6 +107,29 @@ export default function Home() {
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    if (stage !== 'analyzing') return;
+    const timers = [
+      window.setTimeout(() => {
+        setAnalysisStep(1);
+        setProgress(38);
+      }, 900),
+      window.setTimeout(() => {
+        setAnalysisStep(2);
+        setProgress(67);
+      }, 1900),
+      window.setTimeout(() => {
+        setAnalysisStep(3);
+        setProgress(91);
+      }, 3000),
+      window.setTimeout(() => {
+        setProgress(100);
+        setStage('result');
+      }, 4100),
+    ];
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [stage]);
 
   function updateDraft(field: keyof Draft, value: string) {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -106,10 +153,32 @@ export default function Home() {
       return;
     }
     window.localStorage.setItem('package-inspection-draft', JSON.stringify(draft));
-    setFeedback({
-      type: 'success',
-      text: '检测资料已准备完成。下一轮接入模拟 AI 分析后即可继续。',
-    });
+    setFeedback(null);
+    setResultSaved(false);
+    setAnalysisStep(0);
+    setProgress(14);
+    setStage('analyzing');
+  }
+
+  async function loadDemoImage() {
+    try {
+      const response = await fetch('/og.png');
+      const blob = await response.blob();
+      const file = new File([blob], 'damaged-package-demo.png', { type: 'image/png' });
+      addFiles([file]);
+      if (!draft.waybill) updateDraft('waybill', 'JD-DEMO-20260902');
+      if (!draft.order) updateDraft('order', 'TH-DEMO-0001');
+      setMessage('演示样例已载入，可直接开始智能检测。');
+    } catch {
+      setMessage('演示样例载入失败，请选择本地图片。');
+    }
+  }
+
+  function restartAnalysis() {
+    setResultSaved(false);
+    setAnalysisStep(0);
+    setProgress(14);
+    setStage('analyzing');
   }
 
   function addFiles(files: File[]) {
@@ -260,24 +329,38 @@ export default function Home() {
           <div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div>
               <div className="mb-2 flex items-center gap-2">
-                <span className="rounded-md bg-red-50 px-2 py-1 text-[11px] font-semibold text-[#d92319]">第一轮 · 新建任务</span>
-                <span className="text-xs text-slate-400">草稿保存在当前页面</span>
+                <span className="rounded-md bg-red-50 px-2 py-1 text-[11px] font-semibold text-[#d92319]">
+                  {stage === 'upload' ? '第一轮 · 新建任务' : stage === 'analyzing' ? '第二轮 · 智能分析' : '第二轮 · 检测结果'}
+                </span>
+                <span className="text-xs text-slate-400">
+                  {stage === 'upload' ? '草稿保存在当前页面' : stage === 'analyzing' ? '预计约 5 秒完成' : 'AI 模拟结果可用于前端联调'}
+                </span>
               </div>
               <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-[28px]">退货包裹破损检测</h1>
-              <p className="mt-2 text-sm text-slate-500">上传包裹照片并补充基本信息，为智能识别准备检测任务。</p>
+              <p className="mt-2 text-sm text-slate-500">
+                {stage === 'upload'
+                  ? '上传包裹照片并补充基本信息，为智能识别准备检测任务。'
+                  : stage === 'analyzing'
+                    ? '正在定位包裹破损区域并评估损伤程度，请保持页面开启。'
+                    : '检测已完成，请核对破损位置、识别类别与智能定损建议。'}
+              </p>
             </div>
             <div className="flex items-center gap-2 text-xs text-slate-400">
-              <span className="grid size-6 place-items-center rounded-full bg-emerald-50 text-emerald-600">1</span>
-              <span className="font-medium text-slate-700">提交资料</span>
-              <span className="h-px w-7 bg-slate-200" />
-              <span className="grid size-6 place-items-center rounded-full bg-slate-100">2</span>
-              <span>AI 检测</span>
-              <span className="h-px w-7 bg-slate-200" />
-              <span className="grid size-6 place-items-center rounded-full bg-slate-100">3</span>
-              <span>定损结果</span>
+              <span className="grid size-6 place-items-center rounded-full bg-emerald-50 text-emerald-600"><CheckCircle2 className="size-3.5" /></span>
+              <span className={stage === 'upload' ? 'font-medium text-slate-700' : ''}>提交资料</span>
+              <span className={`h-px w-7 ${stage !== 'upload' ? 'bg-emerald-300' : 'bg-slate-200'}`} />
+              <span className={`grid size-6 place-items-center rounded-full ${stage === 'analyzing' ? 'bg-red-50 font-semibold text-[#e1251b]' : stage === 'result' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100'}`}>
+                {stage === 'result' ? <CheckCircle2 className="size-3.5" /> : '2'}
+              </span>
+              <span className={stage === 'analyzing' ? 'font-medium text-slate-700' : ''}>AI 检测</span>
+              <span className={`h-px w-7 ${stage === 'result' ? 'bg-emerald-300' : 'bg-slate-200'}`} />
+              <span className={`grid size-6 place-items-center rounded-full ${stage === 'result' ? 'bg-red-50 font-semibold text-[#e1251b]' : 'bg-slate-100'}`}>3</span>
+              <span className={stage === 'result' ? 'font-medium text-slate-700' : ''}>定损结果</span>
             </div>
           </div>
 
+          {stage === 'upload' ? (
+            <>
           <div className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(340px,.72fr)]">
             <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_35px_rgba(15,23,42,.045)]">
               <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4 sm:px-6">
@@ -328,6 +411,20 @@ export default function Home() {
                     <p className="mt-4 text-[11px] text-slate-400">支持 JPG、PNG、WEBP · 单张不超过 10MB · 最多 6 张</p>
                   </div>
                 </button>
+
+                {images.length === 0 && (
+                  <div className="mt-3 flex items-center justify-center gap-2 text-xs text-slate-400">
+                    <span>暂时没有合适照片？</span>
+                    <button
+                      type="button"
+                      onClick={loadDemoImage}
+                      className="inline-flex items-center gap-1 font-medium text-[#d92319] hover:underline"
+                    >
+                      <Sparkles className="size-3.5" />
+                      载入演示样例
+                    </button>
+                  </div>
+                )}
 
                 {message && (
                   <output className="mt-3 block rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
@@ -483,6 +580,215 @@ export default function Home() {
               </div>
             </div>
           </div>
+            </>
+          ) : stage === 'analyzing' ? (
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(340px,.72fr)]">
+              <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_35px_rgba(15,23,42,.045)]">
+                <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sm:px-6">
+                  <div>
+                    <h2 className="flex items-center gap-2 text-[15px] font-semibold text-slate-800">
+                      <ScanLine className="size-[18px] text-[#e1251b]" />
+                      实时检测画面
+                    </h2>
+                    <p className="mt-1 text-xs text-slate-400">系统正在逐区域分析包裹表面异常。</p>
+                  </div>
+                  <Badge className="bg-red-50 text-[#d92319]">
+                    <span className="size-1.5 animate-pulse rounded-full bg-[#e1251b]" />
+                    分析中
+                  </Badge>
+                </div>
+                <div className="p-5 sm:p-6">
+                  <div className="relative overflow-hidden rounded-2xl bg-[#08101e]">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={images[0]?.url ?? '/og.png'}
+                      alt="正在分析的包裹"
+                      className="aspect-video w-full object-contain opacity-70"
+                    />
+                    <div className="absolute inset-0 bg-[linear-gradient(rgba(34,211,238,.07)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,.07)_1px,transparent_1px)] bg-[size:34px_34px]" />
+                    <div className="scan-sweep absolute inset-x-0 top-0 h-[2px] bg-cyan-300 shadow-[0_0_22px_5px_rgba(34,211,238,.65)]" />
+                    <div className="absolute left-[57%] top-[25%] h-[55%] w-[27%] border border-cyan-300/70">
+                      <span className="absolute -left-px -top-6 bg-cyan-400 px-2 py-1 text-[10px] font-semibold text-slate-950">疑似破损区域</span>
+                    </div>
+                    <div className="absolute bottom-4 left-4 flex items-center gap-2 rounded-lg bg-slate-950/70 px-3 py-2 text-[11px] text-cyan-100 backdrop-blur">
+                      <Activity className="size-3.5 animate-pulse text-cyan-300" />
+                      视觉模型正在运行
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_35px_rgba(15,23,42,.045)] sm:p-6">
+                <div className="flex items-start gap-3">
+                  <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-red-50 text-[#e1251b]">
+                    <Loader2 className="size-5 animate-spin" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-semibold text-slate-800">AI 智能分析</h2>
+                    <p className="mt-1 text-xs text-slate-400">任务 {draft.waybill || '未填写'}</p>
+                  </div>
+                </div>
+
+                <Progress value={progress} className="mt-6 gap-2 [&_[data-slot=progress-track]]:h-2 [&_[data-slot=progress-indicator]]:bg-[#e1251b]">
+                  <ProgressLabel className="text-xs text-slate-500">综合进度</ProgressLabel>
+                  <ProgressValue className="text-xs font-semibold text-slate-700">{progress}%</ProgressValue>
+                </Progress>
+
+                <div className="mt-6 space-y-1">
+                  {analysisSteps.map((item, index) => {
+                    const isDone = index < analysisStep;
+                    const isActive = index === analysisStep;
+                    return (
+                      <div
+                        key={item.label}
+                        className={`flex gap-3 rounded-xl px-3 py-3 transition ${isActive ? 'bg-red-50/70' : ''}`}
+                      >
+                        <div className={`mt-0.5 grid size-6 shrink-0 place-items-center rounded-full text-[10px] font-semibold ${
+                          isDone
+                            ? 'bg-emerald-500 text-white'
+                            : isActive
+                              ? 'bg-[#e1251b] text-white shadow-[0_0_0_4px_rgba(225,37,27,.1)]'
+                              : 'bg-slate-100 text-slate-400'
+                        }`}>
+                          {isDone ? <CheckCircle2 className="size-3.5" /> : isActive ? <Loader2 className="size-3.5 animate-spin" /> : index + 1}
+                        </div>
+                        <div>
+                          <p className={`text-xs font-medium ${isActive ? 'text-slate-800' : isDone ? 'text-slate-600' : 'text-slate-400'}`}>{item.label}</p>
+                          <p className="mt-1 text-[10px] leading-4 text-slate-400">{item.detail}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <Button
+                  variant="outline"
+                  className="mt-6 h-10 w-full"
+                  onClick={() => setStage('upload')}
+                >
+                  <ArrowLeft className="size-4" />
+                  返回修改资料
+                </Button>
+              </section>
+            </div>
+          ) : (
+            <>
+              <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                {[
+                  { label: '检测图片', value: `${images.length} 张`, icon: ImagePlus, tone: 'text-blue-600 bg-blue-50' },
+                  { label: '发现破损', value: '2 处', icon: FileSearch, tone: 'text-[#e1251b] bg-red-50' },
+                  { label: '最高置信度', value: '94.7%', icon: Gauge, tone: 'text-violet-600 bg-violet-50' },
+                  { label: '处理耗时', value: '4.1 秒', icon: Activity, tone: 'text-emerald-600 bg-emerald-50' },
+                ].map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <div key={item.label} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_28px_rgba(15,23,42,.035)]">
+                      <div className={`grid size-10 place-items-center rounded-xl ${item.tone}`}><Icon className="size-[18px]" /></div>
+                      <div><p className="text-[11px] text-slate-400">{item.label}</p><p className="mt-0.5 text-base font-bold text-slate-800">{item.value}</p></div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(350px,.72fr)]">
+                <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_35px_rgba(15,23,42,.045)]">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-6">
+                    <div>
+                      <h2 className="flex items-center gap-2 text-[15px] font-semibold text-slate-800">
+                        <ScanSearch className="size-[18px] text-[#e1251b]" />
+                        破损检测结果
+                      </h2>
+                      <p className="mt-1 text-xs text-slate-400">检测框位置为前端模拟数据，后续由真实模型坐标替换。</p>
+                    </div>
+                    <div className="flex gap-3 text-[11px] text-slate-500">
+                      <span className="flex items-center gap-1.5"><span className="size-2 rounded-sm bg-[#e1251b]" />破洞</span>
+                      <span className="flex items-center gap-1.5"><span className="size-2 rounded-sm bg-amber-400" />撕裂</span>
+                    </div>
+                  </div>
+                  <div className="p-4 sm:p-6">
+                    <div className="relative overflow-hidden rounded-2xl bg-[#0a1220]">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={images[0]?.url ?? '/og.png'} alt="带破损检测标注的包裹" className="aspect-video w-full object-contain" />
+                      <div className="absolute left-[62%] top-[31%] h-[48%] w-[20%] border-2 border-[#ff3b30] shadow-[0_0_0_1px_rgba(255,255,255,.35)]">
+                        <span className="absolute -left-0.5 -top-7 whitespace-nowrap rounded-t-md bg-[#e1251b] px-2 py-1 text-[10px] font-semibold text-white">破洞 94.7%</span>
+                        <span className="absolute -right-1 -top-1 size-2 rounded-full bg-white ring-2 ring-[#e1251b]" />
+                        <span className="absolute -bottom-1 -left-1 size-2 rounded-full bg-white ring-2 ring-[#e1251b]" />
+                      </div>
+                      <div className="absolute left-[49%] top-[26%] h-[19%] w-[25%] border-2 border-amber-400">
+                        <span className="absolute -left-0.5 -top-7 whitespace-nowrap rounded-t-md bg-amber-400 px-2 py-1 text-[10px] font-semibold text-slate-950">撕裂 88.2%</span>
+                      </div>
+                    </div>
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400">
+                      <span>当前：{images[0]?.file.name ?? '演示样例'}</span>
+                      <span>原图尺寸已按比例适配检测坐标</span>
+                    </div>
+                  </div>
+                </section>
+
+                <div className="space-y-5">
+                  <section className="overflow-hidden rounded-2xl border border-red-200 bg-white shadow-[0_10px_35px_rgba(225,37,27,.07)]">
+                    <div className="bg-gradient-to-r from-[#b91c1c] to-[#e1251b] px-5 py-4 text-white">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-[11px] text-red-100">智能定损等级</p>
+                          <h2 className="mt-1 text-xl font-bold">三级 · 严重破损</h2>
+                        </div>
+                        <TriangleAlert className="size-8 text-white/85" />
+                      </div>
+                    </div>
+                    <div className="p-5">
+                      <div className="space-y-3 text-xs">
+                        <div className="flex justify-between"><span className="text-slate-400">综合风险分</span><span className="font-semibold text-[#d92319]">82 / 100</span></div>
+                        <div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full w-[82%] rounded-full bg-gradient-to-r from-amber-400 to-[#e1251b]" /></div>
+                      </div>
+                      <div className="mt-5 rounded-xl bg-red-50 p-3.5">
+                        <p className="text-xs font-semibold text-red-800">处理建议</p>
+                        <p className="mt-1.5 text-xs leading-5 text-red-700/80">建议转入人工复核，检查内部商品完整性；外包装不建议直接二次流通，并保留物流索赔影像。</p>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_10px_35px_rgba(15,23,42,.045)]">
+                    <h3 className="text-sm font-semibold text-slate-800">识别明细</h3>
+                    <div className="mt-4 space-y-3">
+                      {[
+                        { type: '破洞', confidence: '94.7%', level: '重度', color: 'bg-[#e1251b]' },
+                        { type: '撕裂', confidence: '88.2%', level: '中度', color: 'bg-amber-400' },
+                      ].map((item, index) => (
+                        <div key={item.type} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/60 p-3">
+                          <span className={`grid size-7 place-items-center rounded-lg text-[11px] font-bold text-white ${item.color}`}>{index + 1}</span>
+                          <div className="min-w-0 flex-1"><p className="text-xs font-semibold text-slate-700">{item.type}</p><p className="mt-0.5 text-[10px] text-slate-400">置信度 {item.confidence}</p></div>
+                          <Badge variant="outline" className="text-[10px] text-slate-500">{item.level}</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                </div>
+              </div>
+
+              <div className="mt-5 flex flex-col justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-[0_10px_35px_rgba(15,23,42,.04)] sm:flex-row sm:items-center">
+                <div className="flex items-center gap-2 text-xs text-emerald-700">
+                  <CheckCircle2 className="size-4" />
+                  {resultSaved ? '检测结果已保存到当前任务。' : '检测已完成，结果等待人工复核。'}
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="h-10 flex-1 sm:flex-none" onClick={() => setStage('upload')}>
+                    <ArrowLeft className="size-4" />修改资料
+                  </Button>
+                  <Button variant="outline" className="h-10 flex-1 sm:flex-none" onClick={restartAnalysis}>
+                    <RotateCcw className="size-4" />重新检测
+                  </Button>
+                  <Button
+                    className="h-10 flex-1 bg-[#e1251b] hover:bg-[#c91f17] sm:flex-none"
+                    onClick={() => setResultSaved(true)}
+                    disabled={resultSaved}
+                  >
+                    <Save className="size-4" />{resultSaved ? '已保存' : '保存结果'}
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
         </main>
       </div>
     </div>
