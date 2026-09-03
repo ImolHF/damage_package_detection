@@ -103,6 +103,8 @@ export function StaffPortal({ displayName, signOutHref, role = 'staff' }: { disp
   const [activeView, setActiveView] = useState<WorkspaceView>(role === 'user' ? 'workspace' : 'dashboard');
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [notificationCounts, setNotificationCounts] = useState({ reviewed: 0, pending: 0, uncertain: 0 });
+  const [notificationTargets, setNotificationTargets] = useState<{ reviewed?: string; pending?: string; uncertain?: string }>({});
+  const [focusedTaskId, setFocusedTaskId] = useState<string | undefined>();
   const [notificationsRead, setNotificationsRead] = useState(false);
 
   useEffect(() => {
@@ -110,13 +112,18 @@ export function StaffPortal({ displayName, signOutHref, role = 'staff' }: { disp
       try {
         const response = await fetch('/api/inspections', { cache: 'no-store' });
         if (!response.ok) return;
-        const data = (await response.json()) as { records: Array<{ status: string; confidence: number }> };
+        const data = (await response.json()) as { records: Array<{ id: string; status: string; confidence: number }> };
         const next = {
           reviewed: data.records.filter((item) => item.status === 'reviewed').length,
           pending: data.records.filter((item) => item.status === 'pending_review').length,
           uncertain: data.records.filter((item) => item.confidence < 90).length,
         };
         setNotificationCounts(next);
+        setNotificationTargets({
+          reviewed: data.records.find((item) => item.status === 'reviewed')?.id,
+          pending: data.records.find((item) => item.status === 'pending_review')?.id,
+          uncertain: data.records.find((item) => item.confidence < 90)?.id,
+        });
         const signature = `${role}-${next.reviewed}-${next.pending}-${next.uncertain}`;
         setNotificationsRead(window.localStorage.getItem(`notification-read-${role}`) === signature);
       } catch { /* 下一轮自动刷新 */ }
@@ -396,11 +403,11 @@ export function StaffPortal({ displayName, signOutHref, role = 'staff' }: { disp
               <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3"><div><p className="text-sm font-semibold">消息中心</p><p className="mt-0.5 text-[11px] text-slate-400">每 8 秒自动更新</p></div><button onClick={markNotificationsRead} className="text-xs font-medium text-[#d92319] hover:underline">全部已读</button></div>
               <div className="divide-y divide-slate-100">
                 {role === 'user' ? <>
-                  <button onClick={() => { setActiveView('history'); setNotificationOpen(false); markNotificationsRead(); }} className="flex w-full gap-3 px-4 py-4 text-left hover:bg-slate-50"><span className="mt-0.5 grid size-9 place-items-center rounded-xl bg-emerald-50 text-emerald-600"><ClipboardCheck className="size-4" /></span><span><strong className="text-sm">人工复核结果已更新</strong><span className="mt-1 block text-xs leading-5 text-slate-500">当前共有 {notificationCounts.reviewed} 条已复核记录，点击前往历史记录查看最终结论。</span></span></button>
+                  <button onClick={() => { setFocusedTaskId(notificationTargets.reviewed); setActiveView('history'); setNotificationOpen(false); markNotificationsRead(); }} className="flex w-full gap-3 px-4 py-4 text-left hover:bg-slate-50"><span className="mt-0.5 grid size-9 place-items-center rounded-xl bg-emerald-50 text-emerald-600"><ClipboardCheck className="size-4" /></span><span><strong className="text-sm">人工复核结果已更新</strong><span className="mt-1 block text-xs leading-5 text-slate-500">当前共有 {notificationCounts.reviewed} 条已复核记录，点击查看最新最终结论。</span></span></button>
                   <div className="flex gap-3 px-4 py-4"><span className="mt-0.5 grid size-9 place-items-center rounded-xl bg-blue-50 text-blue-600"><Activity className="size-4" /></span><span><strong className="text-sm">检测任务自动同步中</strong><span className="mt-1 block text-xs leading-5 text-slate-500">提交后的检测与复核状态会自动刷新，无需重复提交。</span></span></div>
                 </> : <>
-                  <button onClick={() => { setActiveView('review'); setNotificationOpen(false); markNotificationsRead(); }} className="flex w-full gap-3 px-4 py-4 text-left hover:bg-slate-50"><span className="mt-0.5 grid size-9 place-items-center rounded-xl bg-amber-50 text-amber-600"><ClipboardCheck className="size-4" /></span><span><strong className="text-sm">{notificationCounts.pending} 条任务等待复核</strong><span className="mt-1 block text-xs leading-5 text-slate-500">点击直接进入人工复核操作台。</span></span></button>
-                  <button onClick={() => { setActiveView('dashboard'); setNotificationOpen(false); markNotificationsRead(); }} className="flex w-full gap-3 px-4 py-4 text-left hover:bg-slate-50"><span className="mt-0.5 grid size-9 place-items-center rounded-xl bg-red-50 text-[#e1251b]"><TriangleAlert className="size-4" /></span><span><strong className="text-sm">发现 {notificationCounts.uncertain} 条存疑样本</strong><span className="mt-1 block text-xs leading-5 text-slate-500">置信度低于 90%，可在数据看板查看样本回流情况。</span></span></button>
+                  <button onClick={() => { setFocusedTaskId(notificationTargets.pending); setActiveView('review'); setNotificationOpen(false); markNotificationsRead(); }} className="flex w-full gap-3 px-4 py-4 text-left hover:bg-slate-50"><span className="mt-0.5 grid size-9 place-items-center rounded-xl bg-amber-50 text-amber-600"><ClipboardCheck className="size-4" /></span><span><strong className="text-sm">{notificationCounts.pending} 条任务等待复核</strong><span className="mt-1 block text-xs leading-5 text-slate-500">点击直接打开最新待复核任务。</span></span></button>
+                  <button onClick={() => { setFocusedTaskId(notificationTargets.uncertain); setActiveView('dashboard'); setNotificationOpen(false); markNotificationsRead(); }} className="flex w-full gap-3 px-4 py-4 text-left hover:bg-slate-50"><span className="mt-0.5 grid size-9 place-items-center rounded-xl bg-red-50 text-[#e1251b]"><TriangleAlert className="size-4" /></span><span><strong className="text-sm">发现 {notificationCounts.uncertain} 条存疑样本</strong><span className="mt-1 block text-xs leading-5 text-slate-500">置信度低于 90%，可在数据看板查看样本回流情况。</span></span></button>
                 </>}
               </div>
             </section>}
@@ -881,11 +888,11 @@ export function StaffPortal({ displayName, signOutHref, role = 'staff' }: { disp
           )}
         </main>
         ) : activeView === 'history' ? (
-          <HistoryView onReview={() => setActiveView('review')} canReview={role === 'staff'} />
+          <HistoryView onReview={() => setActiveView('review')} canReview={role === 'staff'} initialSelectedId={focusedTaskId} />
         ) : activeView === 'dashboard' ? (
           <AnalyticsView />
         ) : (
-          <ReviewView onHistory={() => setActiveView('history')} />
+          <ReviewView onHistory={() => setActiveView('history')} initialSelectedId={focusedTaskId} />
         )}
       </div>
     </div>

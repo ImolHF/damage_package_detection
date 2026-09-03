@@ -20,11 +20,12 @@ import { InspectionRecord, levelLabels } from '@/lib/inspection-types';
 
 type ReviewViewProps = {
   onHistory: () => void;
+  initialSelectedId?: string;
 };
 
 const damageOptions = ['破洞', '撕裂', '压瘪', '浸湿', '污损', '开封', '胶带异常', '其他破损'];
 
-export function ReviewView({ onHistory }: ReviewViewProps) {
+export function ReviewView({ onHistory, initialSelectedId }: ReviewViewProps) {
   const [records, setRecords] = useState<InspectionRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -36,7 +37,8 @@ export function ReviewView({ onHistory }: ReviewViewProps) {
       const data = (await response.json()) as { records: InspectionRecord[] };
       const pending = data.records.filter((record) => record.status === 'pending_review');
       setRecords(pending);
-      setSelectedId(preferredId && pending.some((item) => item.id === preferredId) ? preferredId : pending[0]?.id ?? null);
+      const targetId = preferredId ?? initialSelectedId;
+      setSelectedId(targetId && pending.some((item) => item.id === targetId) ? targetId : pending[0]?.id ?? null);
     } finally {
       setLoading(false);
     }

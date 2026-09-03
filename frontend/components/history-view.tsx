@@ -20,9 +20,10 @@ import { InspectionRecord, levelLabels, sceneLabels } from '@/lib/inspection-typ
 type HistoryViewProps = {
   onReview: () => void;
   canReview?: boolean;
+  initialSelectedId?: string;
 };
 
-export function HistoryView({ onReview, canReview = true }: HistoryViewProps) {
+export function HistoryView({ onReview, canReview = true, initialSelectedId }: HistoryViewProps) {
   const [records, setRecords] = useState<InspectionRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
@@ -35,7 +36,7 @@ export function HistoryView({ onReview, canReview = true }: HistoryViewProps) {
       const response = await fetch('/api/inspections');
       const data = (await response.json()) as { records: InspectionRecord[] };
       setRecords(data.records);
-      setSelectedId((current) => current ?? data.records[0]?.id ?? null);
+      setSelectedId((current) => initialSelectedId && data.records.some((item) => item.id === initialSelectedId) ? initialSelectedId : current ?? data.records[0]?.id ?? null);
     } finally {
       setLoading(false);
     }
@@ -141,6 +142,11 @@ export function HistoryView({ onReview, canReview = true }: HistoryViewProps) {
                   <div><dt className="text-slate-400">最终等级</dt><dd className="mt-1 font-medium text-slate-700">{levelLabels[selected.reviewLevel ?? selected.aiLevel]}</dd></div>
                 </dl>
                 {selected.reviewNote && <div className="mt-5 rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-500"><p className="mb-1 font-semibold text-slate-700">复核意见</p>{selected.reviewNote}</div>}
+                <div className="mt-5 border-t border-slate-100 pt-5"><p className="text-xs font-semibold text-slate-700">处理进度</p><ol className="mt-4 space-y-4">
+                  <li className="flex gap-3"><span className="mt-0.5 grid size-6 place-items-center rounded-full bg-emerald-50 text-emerald-600"><CheckCircle2 className="size-3.5" /></span><div><p className="text-xs font-medium text-slate-700">任务已提交</p><p className="mt-0.5 text-[10px] text-slate-400">{new Date(selected.createdAt).toLocaleString('zh-CN')}</p></div></li>
+                  <li className="flex gap-3"><span className="mt-0.5 grid size-6 place-items-center rounded-full bg-emerald-50 text-emerald-600"><CheckCircle2 className="size-3.5" /></span><div><p className="text-xs font-medium text-slate-700">AI 模拟识别完成</p><p className="mt-0.5 text-[10px] text-slate-400">已生成破损类型和定损建议</p></div></li>
+                  <li className="flex gap-3"><span className={`mt-0.5 grid size-6 place-items-center rounded-full ${selected.status === 'reviewed' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>{selected.status === 'reviewed' ? <CheckCircle2 className="size-3.5" /> : <ClipboardClock className="size-3.5" />}</span><div><p className="text-xs font-medium text-slate-700">{selected.status === 'reviewed' ? '人工复核已完成' : '等待人工复核'}</p><p className="mt-0.5 text-[10px] text-slate-400">{selected.status === 'reviewed' ? new Date(selected.updatedAt).toLocaleString('zh-CN') : '结果将在复核后自动同步'}</p></div></li>
+                </ol></div>
                 {canReview && selected.status === 'pending_review' && <Button onClick={onReview} className="mt-5 h-10 w-full bg-[#e1251b] hover:bg-[#c91f17]">进入人工复核<ChevronRight className="size-4" /></Button>}
               </div>
             ) : <div className="grid h-full place-items-center text-sm text-slate-400">选择一条记录查看详情</div>}
