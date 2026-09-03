@@ -29,6 +29,7 @@ export function ReviewView({ onHistory, initialSelectedId }: ReviewViewProps) {
   const [records, setRecords] = useState<InspectionRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [queueFilter, setQueueFilter] = useState<'all' | 'high' | 'uncertain'>('all');
 
   async function loadRecords(preferredId?: string) {
     setLoading(true);
@@ -50,7 +51,8 @@ export function ReviewView({ onHistory, initialSelectedId }: ReviewViewProps) {
     return () => window.clearInterval(timer);
   }, []);
 
-  const selected = records.find((record) => record.id === selectedId) ?? null;
+  const visibleRecords = records.filter((record) => queueFilter === 'high' ? record.aiLevel >= 3 : queueFilter === 'uncertain' ? record.confidence < 90 : true);
+  const selected = visibleRecords.find((record) => record.id === selectedId) ?? visibleRecords[0] ?? null;
 
   return (
     <main className="mx-auto max-w-[1440px] px-4 py-7 sm:px-7 lg:py-9">
@@ -63,18 +65,26 @@ export function ReviewView({ onHistory, initialSelectedId }: ReviewViewProps) {
         <Button variant="outline" onClick={onHistory}>查看全部记录<ChevronRight className="size-4" /></Button>
       </div>
 
+      <div className="mb-5 grid grid-cols-3 gap-3">
+        {[
+          { key: 'all', label: '全部待复核', value: records.length },
+          { key: 'high', label: '高优先级', value: records.filter((item) => item.aiLevel >= 3).length },
+          { key: 'uncertain', label: '存疑样本', value: records.filter((item) => item.confidence < 90).length },
+        ].map((item) => <button key={item.key} type="button" onClick={() => setQueueFilter(item.key as typeof queueFilter)} className={`rounded-2xl border p-4 text-left transition ${queueFilter === item.key ? 'border-red-200 bg-red-50 shadow-sm' : 'border-slate-200 bg-white hover:bg-slate-50'}`}><p className="text-[11px] text-slate-400">{item.label}</p><p className="mt-1 text-xl font-bold text-slate-800">{item.value}<span className="ml-1 text-xs font-medium text-slate-400">项</span></p></button>)}
+      </div>
+
       {loading ? (
         <div className="grid min-h-[500px] place-items-center rounded-2xl border border-slate-200 bg-white text-sm text-slate-400">正在加载待复核任务…</div>
       ) : selected ? (
         <div className="grid gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_35px_rgba(15,23,42,.045)]">
-            <div className="border-b border-slate-100 px-5 py-4"><div className="flex items-center justify-between"><h2 className="text-sm font-semibold text-slate-800">待复核队列</h2><Badge className="bg-amber-50 text-amber-700">{records.length} 项</Badge></div></div>
+            <div className="border-b border-slate-100 px-5 py-4"><div className="flex items-center justify-between"><h2 className="text-sm font-semibold text-slate-800">待复核队列</h2><Badge className="bg-amber-50 text-amber-700">{visibleRecords.length} 项</Badge></div></div>
             <div className="divide-y divide-slate-100">
-              {records.map((record) => (
+              {visibleRecords.map((record) => (
                 <button key={record.id} onClick={() => setSelectedId(record.id)} className={`w-full px-5 py-4 text-left transition ${record.id === selected.id ? 'bg-red-50/60 shadow-[inset_3px_0_0_#e1251b]' : 'hover:bg-slate-50'}`}>
-                  <div className="flex items-start justify-between gap-2"><p className="text-xs font-semibold text-slate-700">{record.taskNo}</p><span className="text-[10px] text-slate-400">{record.confidence}%</span></div>
+                  <div className="flex items-start justify-between gap-2"><p className="text-xs font-semibold text-slate-700">{record.taskNo}</p><span className={`text-[10px] font-medium ${record.confidence < 90 ? 'text-amber-600' : 'text-slate-400'}`}>{record.confidence}%</span></div>
                   <p className="mt-1 text-[10px] text-slate-400">{record.waybill}</p>
-                  <div className="mt-2 flex gap-1">{record.damageTypes.slice(0, 2).map((type) => <Badge key={type} variant="outline" className="text-[9px]">{type}</Badge>)}</div>
+                  <div className="mt-2 flex flex-wrap gap-1">{record.aiLevel >= 3 && <Badge className="bg-red-50 text-[9px] text-red-700">高优先级</Badge>}{record.confidence < 90 && <Badge className="bg-amber-50 text-[9px] text-amber-700">存疑样本</Badge>}{record.damageTypes.slice(0, 2).map((type) => <Badge key={type} variant="outline" className="text-[9px]">{type}</Badge>)}</div>
                 </button>
               ))}
             </div>
@@ -97,6 +107,7 @@ function ReviewForm({ record, onSaved }: { record: InspectionRecord; onSaved: ()
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [saved, setSaved] = useState(false);
+  const waitMinutes = Math.max(1, Math.floor((Date.now() - new Date(record.createdAt).getTime()) / 60000));
 
   function toggleDamage(type: string) {
     setDamageTypes((current) => current.includes(type) ? current.filter((item) => item !== type) : [...current, type]);
@@ -122,7 +133,7 @@ function ReviewForm({ record, onSaved }: { record: InspectionRecord; onSaved: ()
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_35px_rgba(15,23,42,.045)]">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-6">
         <div><h2 className="flex items-center gap-2 text-[15px] font-semibold text-slate-800"><ClipboardCheck className="size-[18px] text-[#e1251b]" />复核任务 {record.taskNo}</h2><p className="mt-1 text-xs text-slate-400">AI 原始结论：{levelLabels[record.aiLevel]} · 置信度 {record.confidence}%</p></div>
-        <Badge className="bg-amber-50 text-amber-700"><TriangleAlert className="size-3" />待人工确认</Badge>
+        <div className="flex gap-2"><Badge className="bg-amber-50 text-amber-700"><TriangleAlert className="size-3" />待人工确认</Badge>{waitMinutes >= 30 && <Badge className="bg-red-50 text-red-700">已等待 {waitMinutes >= 1440 ? `${Math.floor(waitMinutes / 1440)} 天` : `${waitMinutes} 分钟`}</Badge>}</div>
       </div>
 
       <div className="grid lg:grid-cols-[minmax(0,1.25fr)_minmax(330px,.75fr)]">
