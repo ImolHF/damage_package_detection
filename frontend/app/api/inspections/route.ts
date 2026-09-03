@@ -1,28 +1,17 @@
 import { NextResponse } from 'next/server';
 
 import { ensureDatabase, getDb, InspectionRow, presentInspection } from '@/lib/db';
-import { getChatGPTUser } from '@/app/chatgpt-auth';
-import { getAssignedRole } from '@/lib/roles';
 
-export async function GET() {
-  const user = await getChatGPTUser();
-  if (!user) return NextResponse.json({ error: '请先登录' }, { status: 401 });
-  const role = await getAssignedRole(user.userId);
-  if (!role) return NextResponse.json({ error: '请先选择身份' }, { status: 403 });
+export async function GET(request: Request) {
   const db = getDb();
   await ensureDatabase(db);
-  const query = role === 'staff'
-    ? db.prepare('SELECT * FROM inspections ORDER BY created_at DESC LIMIT 100')
-    : db.prepare('SELECT * FROM inspections WHERE owner_user_id = ? ORDER BY created_at DESC LIMIT 100').bind(user.userId);
+  const scope = new URL(request.url).searchParams.get('scope');
+  const query = scope === 'user' ? db.prepare("SELECT * FROM inspections WHERE status = 'reviewed' ORDER BY updated_at DESC LIMIT 100") : db.prepare('SELECT * FROM inspections ORDER BY created_at DESC LIMIT 100');
   const { results } = await query.all<InspectionRow>();
   return NextResponse.json({ records: results.map(presentInspection) });
 }
 
 export async function POST(request: Request) {
-  const user = await getChatGPTUser();
-  if (!user) return NextResponse.json({ error: '请先登录' }, { status: 401 });
-  const role = await getAssignedRole(user.userId);
-  if (role !== 'user') return NextResponse.json({ error: '仅使用者可以提交检测任务' }, { status: 403 });
   const body = (await request.json()) as {
     waybill?: string;
     orderNo?: string;
@@ -58,7 +47,7 @@ export async function POST(request: Request) {
       body.aiLevel ?? 3,
       now,
       now,
-      user.userId,
+      null,
       140 + Math.floor(Math.random() * 90),
     )
     .run();

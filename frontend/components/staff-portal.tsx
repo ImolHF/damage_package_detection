@@ -71,7 +71,6 @@ const analysisSteps = [
 ];
 
 const navigation = [
-  { label: '历史记录', icon: FileClock, view: 'history', enabled: true },
   { label: '数据看板', icon: LayoutDashboard, view: 'dashboard', enabled: true },
   { label: '复核中心', icon: ClipboardCheck, view: 'review', enabled: true },
 ];

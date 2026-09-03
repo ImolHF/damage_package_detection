@@ -1,15 +1,11 @@
 import { NextResponse } from 'next/server';
 
 import { ensureDatabase, getDb, InspectionRow, presentInspection } from '@/lib/db';
-import { getChatGPTUser } from '@/app/chatgpt-auth';
-import { getAssignedRole } from '@/lib/roles';
 
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const user = await getChatGPTUser();
-  if (!user || await getAssignedRole(user.userId) !== 'staff') return NextResponse.json({ error: '仅工作人员可以复核' }, { status: 403 });
   const { id } = await context.params;
   const body = (await request.json()) as {
     damageTypes?: string[];
