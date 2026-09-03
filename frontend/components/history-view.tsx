@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ChevronRight,
   ClipboardClock,
+  Download,
   FileSearch,
   PackageSearch,
   Search,
@@ -61,6 +62,18 @@ export function HistoryView({ onReview, canReview = true, initialSelectedId }: H
   const selected = records.find((record) => record.id === selectedId) ?? null;
   const reviewedCount = records.filter((record) => record.status === 'reviewed').length;
   const pendingCount = records.filter((record) => record.status === 'pending_review').length;
+
+  function downloadReport(record: InspectionRecord) {
+    const finalLevel = record.reviewLevel ?? record.aiLevel;
+    const suggestion = finalLevel >= 4 ? '拒收或报损，禁止继续流通' : finalLevel === 3 ? '转人工处理并重新包装' : finalLevel === 2 ? '重新包装后复检' : '可正常流通';
+    const report = ['退货包裹破损检测报告', `任务号：${record.taskNo}`, `运单号：${record.waybill}`, `订单号：${record.orderNo || '未填写'}`, `破损类型：${record.damageTypes.join('、')}`, `AI 模拟等级：${levelLabels[record.aiLevel]}`, `AI 置信度：${record.confidence}%`, `人工复核状态：${record.status === 'reviewed' ? '已完成' : '待复核'}`, `人工最终等级：${record.status === 'reviewed' ? levelLabels[finalLevel] : '等待确认'}`, `处理建议：${suggestion}`, `复核人员：${record.reviewer || '—'}`, `复核意见：${record.reviewNote || '—'}`, `生成时间：${new Date().toLocaleString('zh-CN')}`].join('\n');
+    const url = URL.createObjectURL(new Blob([report], { type: 'text/plain;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${record.taskNo}_检测报告.txt`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <main className="mx-auto max-w-[1440px] px-4 py-7 sm:px-7 lg:py-9">
@@ -141,6 +154,11 @@ export function HistoryView({ onReview, canReview = true, initialSelectedId }: H
                   <div><dt className="text-slate-400">AI 置信度</dt><dd className="mt-1 font-medium text-slate-700">{selected.confidence}%</dd></div>
                   <div><dt className="text-slate-400">最终等级</dt><dd className="mt-1 font-medium text-slate-700">{levelLabels[selected.reviewLevel ?? selected.aiLevel]}</dd></div>
                 </dl>
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                  <div className="rounded-xl border border-slate-200 p-3"><p className="text-[10px] text-slate-400">AI 模拟结论</p><p className="mt-1.5 text-xs font-semibold text-slate-700">{levelLabels[selected.aiLevel]}</p><p className="mt-1 text-[10px] text-slate-400">置信度 {selected.confidence}%</p></div>
+                  <div className={`rounded-xl border p-3 ${selected.status === 'reviewed' ? 'border-emerald-200 bg-emerald-50/50' : 'border-amber-200 bg-amber-50/50'}`}><p className="text-[10px] text-slate-400">人工最终结论</p><p className="mt-1.5 text-xs font-semibold text-slate-700">{selected.status === 'reviewed' ? levelLabels[selected.reviewLevel ?? selected.aiLevel] : '等待人工确认'}</p><p className="mt-1 text-[10px] text-slate-400">{selected.status === 'reviewed' ? (selected.reviewLevel === selected.aiLevel ? '与 AI 结论一致' : '人工已调整等级') : '完成后自动同步'}</p></div>
+                </div>
+                <div className="mt-4 rounded-xl bg-[#111b2d] p-4 text-white"><p className="text-[10px] text-slate-400">建议处理方式</p><p className="mt-1.5 text-sm font-semibold">{(selected.reviewLevel ?? selected.aiLevel) >= 4 ? '拒收或报损，禁止继续流通' : (selected.reviewLevel ?? selected.aiLevel) === 3 ? '转人工处理并重新包装' : (selected.reviewLevel ?? selected.aiLevel) === 2 ? '重新包装后复检' : '可正常流通'}</p></div>
                 {selected.reviewNote && <div className="mt-5 rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-500"><p className="mb-1 font-semibold text-slate-700">复核意见</p>{selected.reviewNote}</div>}
                 <div className="mt-5 border-t border-slate-100 pt-5"><p className="text-xs font-semibold text-slate-700">处理进度</p><ol className="mt-4 space-y-4">
                   <li className="flex gap-3"><span className="mt-0.5 grid size-6 place-items-center rounded-full bg-emerald-50 text-emerald-600"><CheckCircle2 className="size-3.5" /></span><div><p className="text-xs font-medium text-slate-700">任务已提交</p><p className="mt-0.5 text-[10px] text-slate-400">{new Date(selected.createdAt).toLocaleString('zh-CN')}</p></div></li>
@@ -148,6 +166,7 @@ export function HistoryView({ onReview, canReview = true, initialSelectedId }: H
                   <li className="flex gap-3"><span className={`mt-0.5 grid size-6 place-items-center rounded-full ${selected.status === 'reviewed' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>{selected.status === 'reviewed' ? <CheckCircle2 className="size-3.5" /> : <ClipboardClock className="size-3.5" />}</span><div><p className="text-xs font-medium text-slate-700">{selected.status === 'reviewed' ? '人工复核已完成' : '等待人工复核'}</p><p className="mt-0.5 text-[10px] text-slate-400">{selected.status === 'reviewed' ? new Date(selected.updatedAt).toLocaleString('zh-CN') : '结果将在复核后自动同步'}</p></div></li>
                 </ol></div>
                 {canReview && selected.status === 'pending_review' && <Button onClick={onReview} className="mt-5 h-10 w-full bg-[#e1251b] hover:bg-[#c91f17]">进入人工复核<ChevronRight className="size-4" /></Button>}
+                <Button variant="outline" onClick={() => downloadReport(selected)} className="mt-3 h-10 w-full"><Download className="size-4" />下载检测报告</Button>
               </div>
             ) : <div className="grid h-full place-items-center text-sm text-slate-400">选择一条记录查看详情</div>}
           </aside>
