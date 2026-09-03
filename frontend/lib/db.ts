@@ -18,6 +18,7 @@ export type InspectionRow = {
   updated_at: string;
   owner_user_id: string | null;
   inference_ms: number | null;
+  feedback_status: string | null;
 };
 
 export function getDb() {
@@ -61,6 +62,7 @@ export async function ensureDatabase(db: D1Database) {
   const names = new Set(columns.results.map((column) => column.name));
   if (!names.has('owner_user_id')) await db.prepare('ALTER TABLE inspections ADD COLUMN owner_user_id TEXT').run();
   if (!names.has('inference_ms')) await db.prepare('ALTER TABLE inspections ADD COLUMN inference_ms INTEGER').run();
+  if (!names.has('feedback_status')) await db.prepare('ALTER TABLE inspections ADD COLUMN feedback_status TEXT').run();
 
   const count = await db.prepare('SELECT COUNT(*) AS count FROM inspections').first<{ count: number }>();
   if ((count?.count ?? 0) === 0) {
@@ -102,5 +104,6 @@ export function presentInspection(row: InspectionRow) {
     updatedAt: row.updated_at,
     ownerUserId: row.owner_user_id ?? '',
     inferenceMs: row.inference_ms ?? 186,
+    feedbackStatus: row.feedback_status ?? '',
   };
 }

@@ -15,6 +15,13 @@
       "when": 1788452039093,
       "tag": "0001_tearful_the_call",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788457178080,
+      "tag": "0002_careful_mandroid",
+      "breakpoints": true
     }
   ]
 }

@@ -12,14 +12,23 @@ export async function PATCH(
     reviewLevel?: number;
     reviewNote?: string;
     reviewer?: string;
+    feedbackStatus?: 'returned';
   };
+
+  const db = getDb();
+  await ensureDatabase(db);
+
+  if (body.feedbackStatus === 'returned') {
+    await db.prepare("UPDATE inspections SET feedback_status = 'returned', updated_at = ? WHERE id = ?").bind(new Date().toISOString(), id).run();
+    const updated = await db.prepare('SELECT * FROM inspections WHERE id = ?').bind(id).first<InspectionRow>();
+    if (!updated) return NextResponse.json({ error: '检测记录不存在' }, { status: 404 });
+    return NextResponse.json({ record: presentInspection(updated) });
+  }
 
   if (!body.reviewLevel || body.reviewLevel < 1 || body.reviewLevel > 4) {
     return NextResponse.json({ error: '请选择有效的复核等级' }, { status: 400 });
   }
 
-  const db = getDb();
-  await ensureDatabase(db);
   const existing = await db.prepare('SELECT id FROM inspections WHERE id = ?').bind(id).first();
   if (!existing) return NextResponse.json({ error: '检测记录不存在' }, { status: 404 });
 

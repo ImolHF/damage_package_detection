@@ -20,6 +20,7 @@ export const inspections = sqliteTable(
     updatedAt: text('updated_at').notNull(),
     ownerUserId: text('owner_user_id'),
     inferenceMs: integer('inference_ms'),
+    feedbackStatus: text('feedback_status'),
   },
   (table) => [index('idx_inspections_status').on(table.status)],
 );

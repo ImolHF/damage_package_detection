@@ -16,6 +16,7 @@ export type InspectionRecord = {
   updatedAt: string;
   ownerUserId: string;
   inferenceMs: number;
+  feedbackStatus: '' | 'returned';
 };
 
 export const sceneLabels: Record<string, string> = {
