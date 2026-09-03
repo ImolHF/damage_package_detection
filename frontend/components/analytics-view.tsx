@@ -179,6 +179,13 @@ export function AnalyticsView() {
         </div>
       </section>
 
+      <section className="mb-5 grid gap-4 lg:grid-cols-2">
+        {[
+          { name: '包裹定位模型', version: 'YOLO11n · V1', file: 'package_detector_yolo11n_v1.pt', purpose: '定位图片中的包裹主体，为破损识别提供裁剪区域。', tone: 'bg-blue-50 text-blue-600' },
+          { name: '破损识别模型', version: 'YOLO11s · V1', file: 'damage_detector_yolo11s_nine_class_v1.pt', purpose: '识别九类包裹破损，输出类别、位置与置信度。', tone: 'bg-violet-50 text-violet-600' },
+        ].map((model) => <div key={model.name} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_28px_rgba(15,23,42,.035)]"><div className="flex items-start gap-4"><div className={`grid size-11 place-items-center rounded-xl ${model.tone}`}><Sparkles className="size-5" /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold text-slate-800">{model.name}</h3><Badge className="bg-emerald-50 text-emerald-700">权重已入库</Badge></div><p className="mt-1 text-xs font-medium text-slate-500">{model.version}</p><p className="mt-3 text-xs leading-5 text-slate-500">{model.purpose}</p><p className="mt-3 truncate rounded-lg bg-slate-50 px-3 py-2 font-mono text-[10px] text-slate-400">models/v1/{model.file}</p></div></div></div>)}
+      </section>
+
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {[
           { label: '累计检测任务', value: records.length, suffix: '单', icon: PackageSearch, tone: 'bg-blue-50 text-blue-600' },
