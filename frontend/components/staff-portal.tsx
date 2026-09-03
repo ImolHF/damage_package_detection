@@ -71,6 +71,8 @@ const analysisSteps = [
 ];
 
 const navigation = [
+  { label: '检测工作台', icon: ScanSearch, view: 'workspace', enabled: true },
+  { label: '历史记录', icon: FileClock, view: 'history', enabled: true },
   { label: '数据看板', icon: LayoutDashboard, view: 'dashboard', enabled: true },
   { label: '复核中心', icon: ClipboardCheck, view: 'review', enabled: true },
 ];
@@ -79,7 +81,7 @@ const MAX_FILES = 6;
 const MAX_SIZE = 10 * 1024 * 1024;
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
-export function StaffPortal({ displayName, signOutHref }: { displayName: string; signOutHref: string }) {
+export function StaffPortal({ displayName, signOutHref, role = 'staff' }: { displayName: string; signOutHref: string; role?: 'user' | 'staff' }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -98,7 +100,7 @@ export function StaffPortal({ displayName, signOutHref }: { displayName: string;
   const [resultSaved, setResultSaved] = useState(false);
   const [savingResult, setSavingResult] = useState(false);
   const [resultError, setResultError] = useState('');
-  const [activeView, setActiveView] = useState<WorkspaceView>('dashboard');
+  const [activeView, setActiveView] = useState<WorkspaceView>(role === 'user' ? 'workspace' : 'dashboard');
 
   useEffect(() => {
     const saved = window.localStorage.getItem('package-inspection-draft');
@@ -293,7 +295,7 @@ export function StaffPortal({ displayName, signOutHref }: { displayName: string;
             工作空间
           </p>
           <div className="space-y-1">
-            {navigation.map((item) => {
+            {navigation.filter((item) => role === 'user' ? ['workspace', 'history'].includes(item.view) : ['dashboard', 'review'].includes(item.view)).map((item) => {
               const Icon = item.icon;
               const isActive = item.view === activeView;
               return (
@@ -364,7 +366,7 @@ export function StaffPortal({ displayName, signOutHref }: { displayName: string;
               <div className="grid size-9 place-items-center rounded-xl bg-slate-900 text-xs font-semibold text-white">检</div>
               <div className="hidden sm:block">
                 <p className="text-xs font-semibold text-slate-700">{displayName}</p>
-                <a target="_top" href={signOutHref} className="text-[10px] text-slate-400 hover:text-[#e1251b]">退出登录</a>
+                <a target="_top" href={signOutHref} className="text-[10px] text-slate-400 hover:text-[#e1251b]">返回身份选择</a>
               </div>
             </div>
           </div>
@@ -837,7 +839,7 @@ export function StaffPortal({ displayName, signOutHref }: { displayName: string;
           )}
         </main>
         ) : activeView === 'history' ? (
-          <HistoryView onReview={() => setActiveView('review')} />
+          <HistoryView onReview={() => setActiveView('review')} canReview={role === 'staff'} />
         ) : activeView === 'dashboard' ? (
           <AnalyticsView />
         ) : (

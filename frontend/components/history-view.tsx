@@ -19,9 +19,10 @@ import { InspectionRecord, levelLabels, sceneLabels } from '@/lib/inspection-typ
 
 type HistoryViewProps = {
   onReview: () => void;
+  canReview?: boolean;
 };
 
-export function HistoryView({ onReview }: HistoryViewProps) {
+export function HistoryView({ onReview, canReview = true }: HistoryViewProps) {
   const [records, setRecords] = useState<InspectionRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
@@ -68,9 +69,9 @@ export function HistoryView({ onReview }: HistoryViewProps) {
           <h1 className="mt-3 text-2xl font-bold tracking-tight text-slate-900 sm:text-[28px]">历史检测记录</h1>
           <p className="mt-2 text-sm text-slate-500">集中查看 AI 检测、定损等级与人工复核状态。</p>
         </div>
-        <Button onClick={onReview} className="bg-[#e1251b] hover:bg-[#c91f17]">
+        {canReview && <Button onClick={onReview} className="bg-[#e1251b] hover:bg-[#c91f17]">
           <ClipboardClock className="size-4" />前往复核中心
-        </Button>
+        </Button>}
       </div>
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -140,7 +141,7 @@ export function HistoryView({ onReview }: HistoryViewProps) {
                   <div><dt className="text-slate-400">最终等级</dt><dd className="mt-1 font-medium text-slate-700">{levelLabels[selected.reviewLevel ?? selected.aiLevel]}</dd></div>
                 </dl>
                 {selected.reviewNote && <div className="mt-5 rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-500"><p className="mb-1 font-semibold text-slate-700">复核意见</p>{selected.reviewNote}</div>}
-                {selected.status === 'pending_review' && <Button onClick={onReview} className="mt-5 h-10 w-full bg-[#e1251b] hover:bg-[#c91f17]">进入人工复核<ChevronRight className="size-4" /></Button>}
+                {canReview && selected.status === 'pending_review' && <Button onClick={onReview} className="mt-5 h-10 w-full bg-[#e1251b] hover:bg-[#c91f17]">进入人工复核<ChevronRight className="size-4" /></Button>}
               </div>
             ) : <div className="grid h-full place-items-center text-sm text-slate-400">选择一条记录查看详情</div>}
           </aside>
