@@ -38,6 +38,7 @@ import { Label } from '@/components/ui/label';
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
 import { Progress, ProgressLabel, ProgressValue } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
+import { AnalyticsView } from '@/components/analytics-view';
 import { HistoryView } from '@/components/history-view';
 import { ReviewView } from '@/components/review-view';
 
@@ -72,7 +73,7 @@ const analysisSteps = [
 const navigation = [
   { label: '检测工作台', icon: ScanSearch, view: 'workspace', enabled: true },
   { label: '历史记录', icon: FileClock, view: 'history', enabled: true },
-  { label: '数据看板', icon: LayoutDashboard, view: 'dashboard', enabled: false },
+  { label: '数据看板', icon: LayoutDashboard, view: 'dashboard', enabled: true },
   { label: '复核中心', icon: ClipboardCheck, view: 'review', enabled: true },
 ];
 
@@ -839,6 +840,8 @@ export default function Home() {
         </main>
         ) : activeView === 'history' ? (
           <HistoryView onReview={() => setActiveView('review')} />
+        ) : activeView === 'dashboard' ? (
+          <AnalyticsView />
         ) : (
           <ReviewView onHistory={() => setActiveView('history')} />
         )}
