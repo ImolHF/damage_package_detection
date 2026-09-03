@@ -36,6 +36,7 @@ import {
   ChartTooltipContent,
 } from '@/components/ui/chart';
 import { Progress, ProgressLabel, ProgressValue } from '@/components/ui/progress';
+import { Slider } from '@/components/ui/slider';
 import { InspectionRecord, levelLabels } from '@/lib/inspection-types';
 
 const trendConfig = {
@@ -47,12 +48,20 @@ const levelConfig = {
 } satisfies ChartConfig;
 
 const damageColors = ['#e1251b', '#f59e0b', '#2563eb', '#8b5cf6', '#10b981', '#64748b'];
+const classMetrics = [
+  { name: '破洞', precision: 95.2, recall: 93.8, samples: 286 }, { name: '撕裂', precision: 93.6, recall: 91.5, samples: 241 },
+  { name: '压瘪', precision: 91.8, recall: 90.4, samples: 218 }, { name: '浸湿', precision: 94.1, recall: 92.7, samples: 194 },
+  { name: '污损', precision: 89.7, recall: 87.9, samples: 166 }, { name: '开封', precision: 92.4, recall: 90.8, samples: 153 },
+  { name: '胶带异常', precision: 88.9, recall: 86.6, samples: 129 }, { name: '变形', precision: 90.5, recall: 88.8, samples: 174 },
+  { name: '其他破损', precision: 85.3, recall: 82.9, samples: 97 },
+];
 
 export function AnalyticsView() {
   const [records, setRecords] = useState<InspectionRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [returningId, setReturningId] = useState<string | null>(null);
+  const [confidenceThreshold, setConfidenceThreshold] = useState(90);
 
   async function loadRecords() {
     setLoading(true);
@@ -85,13 +94,13 @@ export function AnalyticsView() {
     const consistent = reviewed.filter((item) => item.reviewLevel === item.aiLevel).length;
     const consistency = reviewed.length ? Math.round((consistent / reviewed.length) * 100) : 0;
     const completion = records.length ? Math.round((reviewed.length / records.length) * 100) : 0;
-    const uncertain = records.filter((item) => item.confidence < 90).length;
+    const uncertain = records.filter((item) => item.confidence < confidenceThreshold).length;
     const uncertainRatio = records.length ? Math.round((uncertain / records.length) * 100) : 0;
     const averageInference = records.length ? Math.round(records.reduce((sum, item) => sum + item.inferenceMs, 0) / records.length) : 0;
-    const returned = records.filter((item) => item.feedbackStatus === 'returned').length;
+    const returned = records.filter((item) => item.feedbackStatus === 'returned' && item.confidence < confidenceThreshold).length;
     const feedbackRate = uncertain ? Math.round((returned / uncertain) * 100) : 0;
     return { reviewed: reviewed.length, pending, highRisk, averageConfidence, consistency, completion, uncertainRatio, averageInference, feedbackRate };
-  }, [records]);
+  }, [records, confidenceThreshold]);
 
   const damageData = useMemo(() => {
     const counts = new Map<string, number>();
@@ -197,9 +206,15 @@ export function AnalyticsView() {
         ].map((model) => <div key={model.name} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_8px_28px_rgba(15,23,42,.035)]"><div className="flex items-start gap-4"><div className={`grid size-11 place-items-center rounded-xl ${model.tone}`}><Sparkles className="size-5" /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold text-slate-800">{model.name}</h3><Badge className="bg-emerald-50 text-emerald-700">权重已入库</Badge></div><p className="mt-1 text-xs font-medium text-slate-500">{model.version}</p><p className="mt-3 text-xs leading-5 text-slate-500">{model.purpose}</p><p className="mt-3 truncate rounded-lg bg-slate-50 px-3 py-2 font-mono text-[10px] text-slate-400">models/v1/{model.file}</p></div></div></div>)}
       </section>
 
+      <section className="mb-5 rounded-2xl border border-slate-200 bg-[#111b2d] p-5 text-white shadow-[0_12px_40px_rgba(15,23,42,.14)] sm:p-6">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-center"><div><div className="flex items-center gap-2"><Gauge className="size-5 text-[#ff665e]" /><h2 className="text-sm font-semibold">动态置信度阈值</h2><Badge className="bg-white/10 text-white">高级控制</Badge></div><p className="mt-2 text-xs leading-5 text-slate-400">低于阈值的检测结果自动进入存疑样本池。调整后，存疑占比和回流能力会实时重新计算。</p></div><div><div className="mb-3 flex items-center justify-between text-xs"><span className="text-slate-300">当前阈值</span><strong className="text-lg text-white">{confidenceThreshold}%</strong></div><Slider value={[confidenceThreshold]} min={70} max={99} step={1} onValueChange={(value) => setConfidenceThreshold(Array.isArray(value) ? value[0] : value)} className="[&_[data-slot=slider-range]]:bg-[#ff665e] [&_[data-slot=slider-track]]:bg-white/15" /><div className="mt-2 flex justify-between text-[10px] text-slate-500"><span>70% 宽松</span><span>99% 严格</span></div></div></div>
+      </section>
+
+      <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_35px_rgba(15,23,42,.045)]"><div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-6"><div><h2 className="text-sm font-semibold text-slate-800">九类破损效果矩阵</h2><p className="mt-1 text-xs text-slate-400">V1 模型类别级评估基线，接入真实评测集后自动替换。</p></div><Badge className="bg-amber-50 text-amber-700">演示基线</Badge></div><div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-xs"><thead className="bg-slate-50 text-[11px] text-slate-400"><tr><th className="px-6 py-3">破损类别</th><th className="px-4 py-3">精确率</th><th className="px-4 py-3">召回率</th><th className="px-4 py-3">评测样本</th><th className="px-4 py-3">模型状态</th></tr></thead><tbody className="divide-y divide-slate-100">{classMetrics.map((item) => { const score = Math.min(item.precision, item.recall); return <tr key={item.name} className="hover:bg-slate-50/70"><td className="px-6 py-3.5 font-semibold text-slate-700">{item.name}</td><td className="px-4 py-3.5 text-slate-600">{item.precision}%</td><td className="px-4 py-3.5 text-slate-600">{item.recall}%</td><td className="px-4 py-3.5 text-slate-500">{item.samples}</td><td className="px-4 py-3.5"><Badge className={score >= 90 ? 'bg-emerald-50 text-emerald-700' : score >= 86 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'}>{score >= 90 ? '稳定' : score >= 86 ? '需关注' : '建议补样'}</Badge></td></tr>; })}</tbody></table></div></section>
+
       <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_10px_35px_rgba(15,23,42,.045)]">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-6"><div><h2 className="text-sm font-semibold text-slate-800">存疑样本回流池</h2><p className="mt-1 text-xs text-slate-400">置信度低于 90% 的样本可加入下一轮训练数据。</p></div><Badge className="bg-violet-50 text-violet-700">已回流 {records.filter((item) => item.feedbackStatus === 'returned').length} 条</Badge></div>
-        <div className="divide-y divide-slate-100">{records.filter((item) => item.confidence < 90).length === 0 ? <div className="p-8 text-center text-sm text-slate-400">当前没有存疑样本</div> : records.filter((item) => item.confidence < 90).slice(0, 5).map((record) => <div key={record.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:px-6"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-semibold text-slate-700">{record.taskNo}</p><Badge variant="outline" className="text-[10px]">置信度 {record.confidence}%</Badge></div><p className="mt-1 truncate text-xs text-slate-400">{record.waybill} · {record.damageTypes.join('、')}</p></div>{record.feedbackStatus === 'returned' ? <Badge className="w-fit bg-emerald-50 text-emerald-700"><CheckCircle2 className="size-3" />已加入回流池</Badge> : <Button size="sm" variant="outline" disabled={returningId === record.id} onClick={() => void returnSample(record.id)}>{returningId === record.id ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}加入样本回流</Button>}</div>)}</div>
+        <div className="divide-y divide-slate-100">{records.filter((item) => item.confidence < confidenceThreshold).length === 0 ? <div className="p-8 text-center text-sm text-slate-400">当前阈值下没有存疑样本</div> : records.filter((item) => item.confidence < confidenceThreshold).slice(0, 5).map((record) => <div key={record.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:px-6"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-semibold text-slate-700">{record.taskNo}</p><Badge variant="outline" className="text-[10px]">置信度 {record.confidence}%</Badge></div><p className="mt-1 truncate text-xs text-slate-400">{record.waybill} · {record.damageTypes.join('、')}</p></div>{record.feedbackStatus === 'returned' ? <Badge className="w-fit bg-emerald-50 text-emerald-700"><CheckCircle2 className="size-3" />已加入回流池</Badge> : <Button size="sm" variant="outline" disabled={returningId === record.id} onClick={() => void returnSample(record.id)}>{returningId === record.id ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}加入样本回流</Button>}</div>)}</div>
       </section>
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
