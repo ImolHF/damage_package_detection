@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: parcel-damage-inspection
+    runtime: docker
+    plan: starter
+    healthCheckPath: /api/health
+    envVars:
+      - key: PARCEL_STORAGE_DIR
+        value: /var/data
