@@ -101,6 +101,36 @@ export function StaffPortal({ displayName, signOutHref, role = 'staff' }: { disp
   const [savingResult, setSavingResult] = useState(false);
   const [resultError, setResultError] = useState('');
   const [activeView, setActiveView] = useState<WorkspaceView>(role === 'user' ? 'workspace' : 'dashboard');
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [notificationCounts, setNotificationCounts] = useState({ reviewed: 0, pending: 0, uncertain: 0 });
+  const [notificationsRead, setNotificationsRead] = useState(false);
+
+  useEffect(() => {
+    async function refreshNotifications() {
+      try {
+        const response = await fetch('/api/inspections', { cache: 'no-store' });
+        if (!response.ok) return;
+        const data = (await response.json()) as { records: Array<{ status: string; confidence: number }> };
+        const next = {
+          reviewed: data.records.filter((item) => item.status === 'reviewed').length,
+          pending: data.records.filter((item) => item.status === 'pending_review').length,
+          uncertain: data.records.filter((item) => item.confidence < 90).length,
+        };
+        setNotificationCounts(next);
+        const signature = `${role}-${next.reviewed}-${next.pending}-${next.uncertain}`;
+        setNotificationsRead(window.localStorage.getItem(`notification-read-${role}`) === signature);
+      } catch { /* 下一轮自动刷新 */ }
+    }
+    const first = window.setTimeout(() => void refreshNotifications(), 0);
+    const timer = window.setInterval(() => void refreshNotifications(), 8000);
+    return () => { window.clearTimeout(first); window.clearInterval(timer); };
+  }, [role]);
+
+  function markNotificationsRead() {
+    const signature = `${role}-${notificationCounts.reviewed}-${notificationCounts.pending}-${notificationCounts.uncertain}`;
+    window.localStorage.setItem(`notification-read-${role}`, signature);
+    setNotificationsRead(true);
+  }
 
   useEffect(() => {
     const saved = window.localStorage.getItem('package-inspection-draft');
@@ -357,11 +387,23 @@ export function StaffPortal({ displayName, signOutHref, role = 'staff' }: { disp
               {activeView === 'workspace' ? '检测工作台' : activeView === 'history' ? '历史记录' : activeView === 'review' ? '复核中心' : '数据看板'}
             </span>
           </div>
-          <div className="ml-auto flex items-center gap-2">
-            <button className="relative rounded-xl p-2.5 text-slate-500 transition hover:bg-slate-100" aria-label="通知">
+          <div className="relative ml-auto flex items-center gap-2">
+            <button onClick={() => setNotificationOpen((open) => !open)} className="relative rounded-xl p-2.5 text-slate-500 transition hover:bg-slate-100" aria-label="通知" aria-expanded={notificationOpen}>
               <Bell className="size-[18px]" />
-              <span className="absolute right-2 top-2 size-1.5 rounded-full bg-[#e1251b] ring-2 ring-white" />
+              {!notificationsRead && <span className="absolute right-1 top-1 grid min-w-4 place-items-center rounded-full bg-[#e1251b] px-1 text-[9px] font-bold leading-4 text-white ring-2 ring-white">{role === 'user' ? Math.min(notificationCounts.reviewed, 9) : Math.min(notificationCounts.pending + notificationCounts.uncertain, 9)}</span>}
             </button>
+            {notificationOpen && <section className="absolute right-0 top-12 z-50 w-[min(360px,calc(100vw-32px))] overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-900 shadow-[0_24px_70px_rgba(15,23,42,.18)]">
+              <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3"><div><p className="text-sm font-semibold">消息中心</p><p className="mt-0.5 text-[11px] text-slate-400">每 8 秒自动更新</p></div><button onClick={markNotificationsRead} className="text-xs font-medium text-[#d92319] hover:underline">全部已读</button></div>
+              <div className="divide-y divide-slate-100">
+                {role === 'user' ? <>
+                  <button onClick={() => { setActiveView('history'); setNotificationOpen(false); markNotificationsRead(); }} className="flex w-full gap-3 px-4 py-4 text-left hover:bg-slate-50"><span className="mt-0.5 grid size-9 place-items-center rounded-xl bg-emerald-50 text-emerald-600"><ClipboardCheck className="size-4" /></span><span><strong className="text-sm">人工复核结果已更新</strong><span className="mt-1 block text-xs leading-5 text-slate-500">当前共有 {notificationCounts.reviewed} 条已复核记录，点击前往历史记录查看最终结论。</span></span></button>
+                  <div className="flex gap-3 px-4 py-4"><span className="mt-0.5 grid size-9 place-items-center rounded-xl bg-blue-50 text-blue-600"><Activity className="size-4" /></span><span><strong className="text-sm">检测任务自动同步中</strong><span className="mt-1 block text-xs leading-5 text-slate-500">提交后的检测与复核状态会自动刷新，无需重复提交。</span></span></div>
+                </> : <>
+                  <button onClick={() => { setActiveView('review'); setNotificationOpen(false); markNotificationsRead(); }} className="flex w-full gap-3 px-4 py-4 text-left hover:bg-slate-50"><span className="mt-0.5 grid size-9 place-items-center rounded-xl bg-amber-50 text-amber-600"><ClipboardCheck className="size-4" /></span><span><strong className="text-sm">{notificationCounts.pending} 条任务等待复核</strong><span className="mt-1 block text-xs leading-5 text-slate-500">点击直接进入人工复核操作台。</span></span></button>
+                  <button onClick={() => { setActiveView('dashboard'); setNotificationOpen(false); markNotificationsRead(); }} className="flex w-full gap-3 px-4 py-4 text-left hover:bg-slate-50"><span className="mt-0.5 grid size-9 place-items-center rounded-xl bg-red-50 text-[#e1251b]"><TriangleAlert className="size-4" /></span><span><strong className="text-sm">发现 {notificationCounts.uncertain} 条存疑样本</strong><span className="mt-1 block text-xs leading-5 text-slate-500">置信度低于 90%，可在数据看板查看样本回流情况。</span></span></button>
+                </>}
+              </div>
+            </section>}
             <div className="ml-1 flex items-center gap-2 border-l border-slate-200 pl-3">
               <div className="grid size-9 place-items-center rounded-xl bg-slate-900 text-xs font-semibold text-white">检</div>
               <div className="hidden sm:block">
