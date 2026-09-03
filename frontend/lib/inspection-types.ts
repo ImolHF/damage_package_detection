@@ -14,6 +14,8 @@ export type InspectionRecord = {
   isDemo: boolean;
   createdAt: string;
   updatedAt: string;
+  ownerUserId: string;
+  inferenceMs: number;
 };
 
 export const sceneLabels: Record<string, string> = {

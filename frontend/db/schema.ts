@@ -18,6 +18,22 @@ export const inspections = sqliteTable(
     isDemo: integer('is_demo', { mode: 'boolean' }).notNull().default(false),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),
+    ownerUserId: text('owner_user_id'),
+    inferenceMs: integer('inference_ms'),
   },
   (table) => [index('idx_inspections_status').on(table.status)],
+);
+
+export const appUsers = sqliteTable(
+  'app_users',
+  {
+    id: text('id').primaryKey(),
+    authUserId: text('auth_user_id').notNull().unique(),
+    email: text('email').notNull(),
+    displayName: text('display_name').notNull(),
+    role: text('role').notNull(),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (table) => [index('idx_app_users_auth_user_id').on(table.authUserId)],
 );

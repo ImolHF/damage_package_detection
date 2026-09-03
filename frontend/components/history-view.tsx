@@ -42,6 +42,8 @@ export function HistoryView({ onReview }: HistoryViewProps) {
 
   useEffect(() => {
     void loadRecords();
+    const timer = window.setInterval(() => void loadRecords(), 8000);
+    return () => window.clearInterval(timer);
   }, []);
 
   const filtered = useMemo(() => {

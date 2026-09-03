@@ -44,6 +44,8 @@ export function ReviewView({ onHistory }: ReviewViewProps) {
 
   useEffect(() => {
     void loadRecords();
+    const timer = window.setInterval(() => void loadRecords(), 8000);
+    return () => window.clearInterval(timer);
   }, []);
 
   const selected = records.find((record) => record.id === selectedId) ?? null;

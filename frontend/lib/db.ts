@@ -16,6 +16,8 @@ export type InspectionRow = {
   is_demo: number;
   created_at: string;
   updated_at: string;
+  owner_user_id: string | null;
+  inference_ms: number | null;
 };
 
 export function getDb() {
@@ -24,6 +26,15 @@ export function getDb() {
 
 export async function ensureDatabase(db: D1Database) {
   await db.batch([
+    db.prepare(`CREATE TABLE IF NOT EXISTS app_users (
+      id TEXT PRIMARY KEY NOT NULL,
+      auth_user_id TEXT NOT NULL UNIQUE,
+      email TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      role TEXT NOT NULL CHECK(role IN ('user', 'staff')),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS inspections (
       id TEXT PRIMARY KEY NOT NULL,
       task_no TEXT NOT NULL UNIQUE,
@@ -43,7 +54,13 @@ export async function ensureDatabase(db: D1Database) {
     )`),
     db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS inspections_task_no_unique ON inspections(task_no)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_inspections_status ON inspections(status)'),
+    db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_app_users_auth_user_id ON app_users(auth_user_id)'),
   ]);
+
+  const columns = await db.prepare('PRAGMA table_info(inspections)').all<{ name: string }>();
+  const names = new Set(columns.results.map((column) => column.name));
+  if (!names.has('owner_user_id')) await db.prepare('ALTER TABLE inspections ADD COLUMN owner_user_id TEXT').run();
+  if (!names.has('inference_ms')) await db.prepare('ALTER TABLE inspections ADD COLUMN inference_ms INTEGER').run();
 
   const count = await db.prepare('SELECT COUNT(*) AS count FROM inspections').first<{ count: number }>();
   if ((count?.count ?? 0) === 0) {
@@ -83,5 +100,7 @@ export function presentInspection(row: InspectionRow) {
     isDemo: Boolean(row.is_demo),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    ownerUserId: row.owner_user_id ?? '',
+    inferenceMs: row.inference_ms ?? 186,
   };
 }
