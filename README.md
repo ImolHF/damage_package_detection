@@ -33,7 +33,13 @@ npm run dev
 
 ## 模型
 
-第一版包裹检测模型和九分类损伤模型位于 [`models/v1`](models/v1)，具体类别、指标和调用方法见 [`models/v1/README.md`](models/v1/README.md)。
+模型按版本保存：
+
+- [`models/v1`](models/v1)：早期约 400 张数据训练的包裹模型和普通九分类损伤模型；
+- [`models/v2`](models/v2)：新版数据训练的分层多任务损伤模型；
+- [`models/v3`](models/v3)：当前面积感知损伤模型。
+
+每个目录中的 README 说明了对应模型的类别、指标和调用方法。当前后端默认仍使用 V1，切换到 V2 或 V3 时必须先加载仓库中的 `damage_multitask` 自定义检测头。
 
 ## Railway 部署
 
