@@ -1,10 +1,10 @@
-import shutil
 from pathlib import Path
 from uuid import uuid4
-from PIL import Image
-from .config import WEIGHTS_PATH, RESULT_DIR, CLASS_MAPPING
+from PIL import Image, ImageDraw
+from .config import PACKAGE_WEIGHTS_PATH, DAMAGE_WEIGHTS_PATH, RESULT_DIR, CLASS_MAPPING
 
-_model = None
+_package_model = None
+_damage_model = None
 
 
 def translate_class(name: str):
@@ -12,14 +12,15 @@ def translate_class(name: str):
     return CLASS_MAPPING.get(normalized, {"type": name, "level": "L2"})
 
 
-def get_model():
-    global _model
-    if _model is None:
-        if not WEIGHTS_PATH.exists():
-            return None
+def get_models():
+    global _package_model, _damage_model
+    if _package_model is None or _damage_model is None:
+        if not PACKAGE_WEIGHTS_PATH.exists() or not DAMAGE_WEIGHTS_PATH.exists():
+            return None, None
         from ultralytics import YOLO
-        _model = YOLO(str(WEIGHTS_PATH))
-    return _model
+        _package_model = YOLO(str(PACKAGE_WEIGHTS_PATH))
+        _damage_model = YOLO(str(DAMAGE_WEIGHTS_PATH))
+    return _package_model, _damage_model
 
 
 def decide(detections):
@@ -40,23 +41,42 @@ def decide(detections):
 
 
 def predict(image_path, confidence=0.35):
-    image = Image.open(image_path)
+    image = Image.open(image_path).convert("RGB")
     width, height = image.size
-    model = get_model()
+    package_model, damage_model = get_models()
     filename = f"{uuid4().hex}.jpg"
     result_path = RESULT_DIR / filename
-    if model is None:
-        # 无权重时保留原图，让前端仍可完整演示界面和流程。
-        shutil.copy2(image_path, result_path)
+    if package_model is None or damage_model is None:
+        image.save(result_path, quality=92)
         return [], filename, width, height, "demo"
-    result = model.predict(source=str(image_path), conf=confidence, imgsz=640, save=False, verbose=False)[0]
-    result.save(filename=str(result_path))
+
+    package_result = package_model.predict(source=image, conf=0.25, imgsz=640, save=False, verbose=False)[0]
+    package_boxes = list(package_result.boxes or [])
+    if package_boxes:
+        best = max(package_boxes, key=lambda box: float(box.conf[0]))
+        px1, py1, px2, py2 = [float(v) for v in best.xyxy[0].tolist()]
+        pad_x, pad_y = (px2 - px1) * 0.08, (py2 - py1) * 0.08
+        crop_box = (max(0, int(px1 - pad_x)), max(0, int(py1 - pad_y)), min(width, int(px2 + pad_x)), min(height, int(py2 + pad_y)))
+    else:
+        crop_box = (0, 0, width, height)
+
+    crop = image.crop(crop_box)
+    result = damage_model.predict(source=crop, conf=confidence, imgsz=640, save=False, verbose=False)[0]
     detections = []
     for box in result.boxes or []:
-        x1, y1, x2, y2 = [round(float(v), 1) for v in box.xyxy[0].tolist()]
+        cx1, cy1, cx2, cy2 = [float(v) for v in box.xyxy[0].tolist()]
+        x1, y1, x2, y2 = [round(v, 1) for v in (cx1 + crop_box[0], cy1 + crop_box[1], cx2 + crop_box[0], cy2 + crop_box[1])]
         label = result.names[int(box.cls[0])]
         mapped = translate_class(label)
         detections.append({"label": label, "damage_type": mapped["type"], "level": mapped["level"],
                            "confidence": round(float(box.conf[0]), 4), "bbox": [x1, y1, x2, y2],
                            "area_ratio": round((x2-x1)*(y2-y1)/(width*height), 4)})
-    return detections, filename, width, height, "model"
+
+    annotated = image.copy()
+    draw = ImageDraw.Draw(annotated)
+    draw.rectangle(crop_box, outline="#2563eb", width=max(2, width // 400))
+    for item in detections:
+        draw.rectangle(item["bbox"], outline="#e1251b", width=max(3, width // 250))
+        draw.text((item["bbox"][0] + 4, max(0, item["bbox"][1] - 16)), f'{item["label"]} {item["confidence"]:.0%}', fill="#e1251b")
+    annotated.save(result_path, quality=92)
+    return detections, filename, width, height, "two_stage_v1"

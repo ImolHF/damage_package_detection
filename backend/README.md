@@ -16,9 +16,9 @@
 
 ## 接入模型
 
-1. 将训练完成的权重命名为 `best.pt`。
-2. 放到 `weights/best.pt`。
-3. 打开 `app/config.py`，将 `CLASS_MAPPING` 的键改为训练 `data.yaml` 里的类别名。
+1. 包裹定位权重位于 `models/v1/package_detector_yolo11n_v1.pt`。
+2. 九类破损权重位于 `models/v1/damage_detector_yolo11s_nine_class_v1.pt`。
+3. 后端先定位包裹并保留 8% 边缘，再在裁剪区域识别破损并映射回原图。
 4. 重启服务。系统会自动使用 NVIDIA GPU（若 PyTorch CUDA 环境可用）。
 
-无 `best.pt` 时，网站仍会运行，但检测接口为演示模式，不会伪造检测框。
+任一 V1 权重缺失时，网站仍会运行，但检测接口会返回演示模式且不会伪造检测框。

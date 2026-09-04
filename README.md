@@ -29,8 +29,12 @@ npm run dev
 - 前端成员主要修改 `frontend/`。
 - 后端成员主要修改 `backend/`。
 - 修改接口时，前端和后端成员需要同步确认请求地址、字段名称和返回格式。
-- 当前正式前端仍使用模拟识别流程，尚未连接 `backend` 中的真实 YOLO 检测接口。
+- 前端会优先通过 `/api/model/detect` 调用后端两阶段 YOLO V1 推理；未配置模型服务地址时自动降级为模拟流程。
 
 ## 模型
 
 第一版包裹检测模型和九分类损伤模型位于 [`models/v1`](models/v1)，具体类别、指标和调用方法见 [`models/v1/README.md`](models/v1/README.md)。
+
+## Railway 部署
+
+仓库根目录已提供 `Dockerfile` 和 `railway.json`。连接本仓库并从根目录部署后，将前端环境变量 `MODEL_API_URL` 设置为 Railway 生成的公网地址。

@@ -62,6 +62,7 @@ type Feedback = {
 
 type Stage = 'upload' | 'analyzing' | 'result';
 type WorkspaceView = 'workspace' | 'history' | 'dashboard' | 'review';
+type ModelResult = { mode: string; result_image_url: string; detections: Array<{ damage_type: string; level: string; confidence: number; bbox: number[] }>; decision: { damage_type: string; damage_level: string; recommendation: string; reason: string } };
 
 const analysisSteps = [
   { label: '图像质量检查', detail: '检测清晰度、光线与主体完整性' },
@@ -105,6 +106,8 @@ export function StaffPortal({ displayName, signOutHref, role = 'staff' }: { disp
   const [notificationCounts, setNotificationCounts] = useState({ reviewed: 0, pending: 0, uncertain: 0 });
   const [notificationTargets, setNotificationTargets] = useState<{ reviewed?: string; pending?: string; uncertain?: string }>({});
   const [focusedTaskId, setFocusedTaskId] = useState<string | undefined>();
+  const [modelResult, setModelResult] = useState<ModelResult | null>(null);
+  const [inferenceTime, setInferenceTime] = useState(4100);
   const [notificationsRead, setNotificationsRead] = useState(false);
 
   useEffect(() => {
@@ -185,7 +188,7 @@ export function StaffPortal({ displayName, signOutHref, role = 'staff' }: { disp
     setFeedback({ type: 'success', text: '草稿已保存在当前浏览器中。' });
   }
 
-  function prepareTask() {
+  async function prepareTask() {
     if (!draft.waybill.trim()) {
       setFeedback({ type: 'error', text: '请先填写运单号。' });
       document.querySelector<HTMLInputElement>('#waybill')?.focus();
@@ -203,6 +206,20 @@ export function StaffPortal({ displayName, signOutHref, role = 'staff' }: { disp
     setAnalysisStep(0);
     setProgress(14);
     setStage('analyzing');
+    setModelResult(null);
+    const startedAt = performance.now();
+    try {
+      const form = new FormData();
+      form.append('file', images[0].file);
+      form.append('confidence', '0.35');
+      const response = await fetch('/api/model/detect', { method: 'POST', body: form });
+      if (!response.ok) throw new Error('model_unavailable');
+      const payload = (await response.json()) as { data: ModelResult };
+      setModelResult(payload.data);
+      setInferenceTime(Math.max(1, Math.round(performance.now() - startedAt)));
+    } catch {
+      setMessage('模型服务尚未连接，本次使用前端模拟结果；后端上线后会自动切换为真实推理。');
+    }
   }
 
   async function loadDemoImage() {
@@ -238,9 +255,9 @@ export function StaffPortal({ displayName, signOutHref, role = 'staff' }: { disp
           waybill: draft.waybill,
           orderNo: draft.order,
           scene: draft.scene,
-          damageTypes: ['破洞', '撕裂'],
-          confidence: 95,
-          aiLevel: 3,
+          damageTypes: modelResult?.detections.map((item) => item.damage_type) ?? ['破洞', '撕裂'],
+          confidence: modelResult?.detections.length ? Math.round(Math.max(...modelResult.detections.map((item) => item.confidence)) * 100) : 95,
+          aiLevel: Number(modelResult?.decision.damage_level.replace('L', '') ?? 3),
         }),
       });
       if (!response.ok) throw new Error('save_failed');
@@ -773,9 +790,9 @@ export function StaffPortal({ displayName, signOutHref, role = 'staff' }: { disp
               <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
                 {[
                   { label: '检测图片', value: `${images.length} 张`, icon: ImagePlus, tone: 'text-blue-600 bg-blue-50' },
-                  { label: '发现破损', value: '2 处', icon: FileSearch, tone: 'text-[#e1251b] bg-red-50' },
-                  { label: '最高置信度', value: '94.7%', icon: Gauge, tone: 'text-violet-600 bg-violet-50' },
-                  { label: '处理耗时', value: '4.1 秒', icon: Activity, tone: 'text-emerald-600 bg-emerald-50' },
+                  { label: '发现破损', value: `${modelResult?.detections.length ?? 2} 处`, icon: FileSearch, tone: 'text-[#e1251b] bg-red-50' },
+                  { label: '最高置信度', value: modelResult?.detections.length ? `${Math.round(Math.max(...modelResult.detections.map((item) => item.confidence)) * 1000) / 10}%` : '94.7%', icon: Gauge, tone: 'text-violet-600 bg-violet-50' },
+                  { label: '处理耗时', value: `${(inferenceTime / 1000).toFixed(1)} 秒`, icon: Activity, tone: 'text-emerald-600 bg-emerald-50' },
                 ].map((item) => {
                   const Icon = item.icon;
                   return (
@@ -795,7 +812,7 @@ export function StaffPortal({ displayName, signOutHref, role = 'staff' }: { disp
                         <ScanSearch className="size-[18px] text-[#e1251b]" />
                         破损检测结果
                       </h2>
-                      <p className="mt-1 text-xs text-slate-400">检测框位置为前端模拟数据，后续由真实模型坐标替换。</p>
+                      <p className="mt-1 text-xs text-slate-400">{modelResult ? `当前由两阶段 V1 模型完成推理（${modelResult.mode}）` : '当前为前端模拟结果，模型服务上线后自动切换。'}</p>
                     </div>
                     <div className="flex gap-3 text-[11px] text-slate-500">
                       <span className="flex items-center gap-1.5"><span className="size-2 rounded-sm bg-[#e1251b]" />破洞</span>
@@ -805,15 +822,15 @@ export function StaffPortal({ displayName, signOutHref, role = 'staff' }: { disp
                   <div className="p-4 sm:p-6">
                     <div className="relative overflow-hidden rounded-2xl bg-[#0a1220]">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={images[0]?.url ?? '/og.png'} alt="带破损检测标注的包裹" className="aspect-video w-full object-contain" />
-                      <div className="absolute left-[62%] top-[31%] h-[48%] w-[20%] border-2 border-[#ff3b30] shadow-[0_0_0_1px_rgba(255,255,255,.35)]">
+                      <img src={modelResult?.result_image_url ?? images[0]?.url ?? '/og.png'} alt="带破损检测标注的包裹" className="aspect-video w-full object-contain" />
+                      {!modelResult && <><div className="absolute left-[62%] top-[31%] h-[48%] w-[20%] border-2 border-[#ff3b30] shadow-[0_0_0_1px_rgba(255,255,255,.35)]">
                         <span className="absolute -left-0.5 -top-7 whitespace-nowrap rounded-t-md bg-[#e1251b] px-2 py-1 text-[10px] font-semibold text-white">破洞 94.7%</span>
                         <span className="absolute -right-1 -top-1 size-2 rounded-full bg-white ring-2 ring-[#e1251b]" />
                         <span className="absolute -bottom-1 -left-1 size-2 rounded-full bg-white ring-2 ring-[#e1251b]" />
                       </div>
                       <div className="absolute left-[49%] top-[26%] h-[19%] w-[25%] border-2 border-amber-400">
                         <span className="absolute -left-0.5 -top-7 whitespace-nowrap rounded-t-md bg-amber-400 px-2 py-1 text-[10px] font-semibold text-slate-950">撕裂 88.2%</span>
-                      </div>
+                      </div></>}
                     </div>
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400">
                       <span>当前：{images[0]?.file.name ?? '演示样例'}</span>
@@ -828,7 +845,7 @@ export function StaffPortal({ displayName, signOutHref, role = 'staff' }: { disp
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-[11px] text-red-100">智能定损等级</p>
-                          <h2 className="mt-1 text-xl font-bold">三级 · 严重破损</h2>
+                          <h2 className="mt-1 text-xl font-bold">{modelResult ? `${modelResult.decision.damage_level.replace('L', '')}级 · ${modelResult.decision.damage_type}` : '三级 · 严重破损'}</h2>
                         </div>
                         <TriangleAlert className="size-8 text-white/85" />
                       </div>
@@ -840,7 +857,7 @@ export function StaffPortal({ displayName, signOutHref, role = 'staff' }: { disp
                       </div>
                       <div className="mt-5 rounded-xl bg-red-50 p-3.5">
                         <p className="text-xs font-semibold text-red-800">处理建议</p>
-                        <p className="mt-1.5 text-xs leading-5 text-red-700/80">建议转入人工复核，检查内部商品完整性；外包装不建议直接二次流通，并保留物流索赔影像。</p>
+                        <p className="mt-1.5 text-xs leading-5 text-red-700/80">{modelResult?.decision.recommendation ?? '建议转入人工复核，检查内部商品完整性；外包装不建议直接二次流通，并保留物流索赔影像。'}</p>
                       </div>
                     </div>
                   </section>
