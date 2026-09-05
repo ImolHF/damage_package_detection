@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>包裹智检</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <section id="login" class="login-shell">
+    <div class="brand"><span class="brand-mark">◇</span><span data-app-name>包裹智检</span><small id="appVersion">Desktop</small></div>
+    <main class="login-card">
+      <div class="eyebrow">LOCAL AI INSPECTION</div>
+      <h1>选择工作身份</h1>
+      <p>本地模型、本地数据，断网也可以完成识别与复核。</p>
+      <div class="role-grid">
+        <button class="role-card" data-role="user">
+          <span class="role-icon">◫</span><strong>我是使用者</strong>
+          <small>提交包裹图片并查看 AI 与人工复核结果</small><b>进入检测端 →</b>
+        </button>
+        <button class="role-card staff" data-role="staff">
+          <span class="role-icon">⌁</span><strong>我是工作人员</strong>
+          <small>处理人工复核、监控模型与管理回流样本</small><b>进入工作台 →</b>
+        </button>
+      </div>
+      <div class="local-badge"><i></i> 本地服务已连接 · 数据仅保存在此电脑</div>
+    </main>
+  </section>
+
+  <section id="app" class="app-shell hidden">
+    <aside>
+      <div class="brand"><span class="brand-mark">◇</span><span data-app-name>包裹智检</span></div>
+      <div class="identity"><span id="identityIcon">◫</span><div><strong id="identityName">使用者</strong><small id="identityRole">检测服务端</small></div></div>
+      <nav id="nav"></nav>
+      <div class="side-foot"><span class="online-dot"></span><span>本地 AI 正常</span><small id="modelVersion">加载模型信息…</small></div>
+    </aside>
+    <div class="workspace">
+      <header>
+        <div><div class="eyebrow" id="pageEyebrow">INSPECTION</div><h2 id="pageTitle">智能检测</h2></div>
+        <div class="header-actions">
+          <button id="notifyBtn" class="icon-btn" type="button" aria-label="查看消息通知" title="消息通知">♢<span id="notifyCount">2</span></button>
+          <button id="switchRole" class="ghost">切换身份</button>
+        </div>
+      </header>
+      <div id="noticePanel" class="notice-panel hidden"></div>
+      <main id="content"></main>
+    </div>
+  </section>
+  <div id="modal" class="modal hidden"><div id="modalBody" class="modal-panel"></div></div>
+  <div id="toast" class="toast"></div>
+  <script src="/app.js"></script>
+</body>
+</html>
